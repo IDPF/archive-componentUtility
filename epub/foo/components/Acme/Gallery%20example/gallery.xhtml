@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang='en-us' lang='en-us'>
+   <head>
+      <meta charset="utf-8"/>
+      <meta name="description" content=""/>
+      <meta name="author" content=""/>
+
+      <meta name="viewport" content="width=900, height=600"/>
+      
+      <title>IDPF Components - Gallery Sample</title>
+      
+      <script type="text/javascript" src="js/external/mootools-core-1.4.5-full-nocompat-yc.js"></script>
+      <script type="text/javascript" src="js/external/mootools-more-1.4.0.1-yc.js"></script>
+      <script type="text/javascript" src="js/common.js"></script>
+      <script type="text/javascript" src="js/gallery.js"></script>
+      
+      <link rel="stylesheet" type="text/css" href="css/gallery.css"/>
+      <link rel="stylesheet" type="text/css" href="css/common.sample.css"/>
+		
+      <script type="text/javascript">
+	 window.addEvent('domready', function () {
+		 new epubComponent.Gallery($("sample"),
+					{options:{
+					"delay":4000,
+					"autoplay":false,
+					"transition":"fade"
+		 }},
+					undefined,
+					{
+						"size":{"height":"500","width":"600"},
+						"images":[{"id":"89437","src":"./images/image-1.png"},
+							{"id":"89438","src":"./images/image-2.png"},
+							{"id":"89439","src":"./images/image-3.png"},
+							{"id":"89440","src":"./images/image-4.png"},
+							{"id":"89441","src":"./images/image-5.png"},
+							{"id":"89442","src":"./images/image-6.png"}],
+						"thumbnails":true,
+						"clickToNext":false
+					}
+				);
+			});
+      </script>
+   </head>
+
+   <body>
+   <h3>Gallery Sample</h3>
+   <div id="sample"></div>
+   </body>
+</html>

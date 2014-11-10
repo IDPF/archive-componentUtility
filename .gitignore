@@ -1,0 +1,51 @@
+#########################
+####     GENERAL     ####
+#########################
+
+# git files we don't want in webr
+.gitattributes
+
+# maven build outputs
+target
+
+# OS X temporary files that should never be committed
+.DS_Store
+*.swp
+*.lock
+profile
+
+# Eclipse
+.classpath
+.project
+.settings/
+
+# IntelliJ
+.idea
+*.iml
+
+
+# Python compiled files
+*.pyc
+build/pip
+
+# git mergetool files
+*.orig
+
+pre-commit-changes.txt
+
+# Emacs temp files
+~*
+*~
+*#
+.projectile
+TAGS
+
+#SVN
+.svn
+*.svn-base
+*#
+
+
+
+
+
