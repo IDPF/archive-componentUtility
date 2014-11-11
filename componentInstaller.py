@@ -20,154 +20,6 @@ componentDirectory = 'components'
 componentNamespace = 'component: http://www.idpf.org/vocab/component/#'
 opfNamespace = "{http://www.idpf.org/2007/opf}"
 
-#---------------------------------------------------------------------------
-# get the path to the opf file from container.xml
-
-def getOpfPath(epub):
-    xmlDom = xml.dom.minidom.parseString(epub.read('META-INF/container.xml'))
-    container = xmlDom.documentElement
-    root = container.getElementsByTagName('rootfile')[0]
-    return root.getAttribute('full-path')
-
-#---------------------------------------------------------------------------
-# get the opf xmldom
-
-def getOpfXmlDom(epub):
-    path = getOpfPath(epub)
-    opfXML = epub.read(path)
-    xmlDom = xml.dom.minidom.parseString(opfXML)
-    return xmlDom
-
-#---------------------------------------------------------------------------
-# get the manifest
-
-def getOpfManifest(epub):
-    xmlDom = getOpfXmlDom(epub)
-    return xmlDom.getElementsByTagName('manifest')[0]
-
-#---------------------------------------------------------------------------
-# get the metadata
-
-def getOpfMetadata(epub):
-    xmlDom = getOpfXmlDom(epub)
-    return xmlDom.getElementsByTagName('metadata')[0]
-
-#---------------------------------------------------------------------------
-# get the spine
-def getOpfSpine(epub):
-    xmlDom = getOpfXmlDom(epub)
-    return xmlDom.getElements.ByTagName('spine')
-
-#---------------------------------------------------------------------------
-# debug - print out opf
-
-def printOPF(epub):
-    path = getOpfPath(epub)
-    opfXML = epub.read(path)
-    print opfXML
-
-#---------------------------------------------------------------------------
-# debug - print out opf manifest
-
-def printOpfManifest(epub):
-    print getOpfManifest(epub)
-
-#---------------------------------------------------------------------------
-# debug - print out opf metadata
-
-def printOpfMetadata(epub):
-   print getOpfMetadata(epub)
-
-#---------------------------------------------------------------------------
-# debug - print out opf spine
-
-def printOpfSpine(epub):
-    print getOpfSpine(epub)
-
-#---------------------------------------------------------------------------
-# if the component prefix not defined add to opf
-
-def addComponentPrefix(package):
-    prefix = package.get('prefix')
-    if prefix == None:
-        package.set('prefix', componentNamespace)
-    elif prefix.find(componentNamespace) < 0:
-        package.set('prefix', prefix + ' ' + componentNamespace)
-
-#---------------------------------------------------------------------------
-# write out the opf dom
-
-def puttOPfXmlDom(epub, manifestXmlDom):
-
-    addComponentPrefix(manifestXmlDom)
-
-    path = epub.getOpfPath()
-
-    lines = xml.dom.minidom.parseString(ET.tostring(manifestXmlDom)).toprettyxml()
-    lines = lines.split('\n')
-    trimmedlines = []
-    for line in lines:
-        line = line.rstrip()
-        if len(line) != 0:
-            trimmedlines.append(line)
-
-    #print trimmedlines
-    cleanedup = '\n'.join(trimmedlines)
-    ##print cleanedup
-    epub.putfile(path, cleanedup)
-
-#---------------------------------------------------------------------------
-# get the component metadata from the opf
-
-def getComponentMetadata(opfXMLDom):
-    componentMetadatum = []
-    metadataItems = opfXMLDom.getElementsByTagName('meta');
-    for meta in metadataItems:
-        property = meta.getAttribute('property');
-        if property.find(componentPrefix) == 0:
-            componentMetadatum.append({ 'property': property, 'value': meta.firstChild.nodeValue })
-    return componentMetadatum
-
-#---------------------------------------------------------------------------
-# get a list of the items in the manifest that we want to transfer
-# ignoring unneeded files
-
-def getComponentManifest(epub):
-    files = []
-    xmlDom = getOpfXmlDom(epub)
-    manifest = xmlDom.getElementsByTagName('item')
-    for item in manifest:
-        # remove nav stuff, there may be other to remove
-        if item.getAttribute('properties') != 'nav':
-            #print 'componentManifest: ' + item.getAttribute('href')
-            files.append(item.getAttribute('href'))
-    return files
-
-#---------------------------------------------------------------------------
-# get the collection associated with this component
-
-def getCollection(xmlDom, creator, name):
-
-    package = xmlDom.getElementsByTagName('package')[0]
-
-    collections = []
-    for child in package.childNodes:
-        if child.localName == 'collection':
-            collections.append(child)
-
-    # this could be made much simpler with an xpath lib, but i am trying to use plain vanilla python
-    for collection in collections:
-        metadata = collection.getElementsByTagName('meta')
-        found = 0
-        for meta in metadata:
-            value = meta.getAttribute('property')
-            if value == 'component:creator' and meta.firstChild.nodeValue == creator:
-                found += 1
-            if value == 'component:name' and meta.firstChild.nodeValue == name:
-                found += 1
-            if found == 2:
-                return collection
-    return None
 
 #---------------------------------------------------------------------------
 
@@ -238,7 +90,11 @@ def transferMetadata(dstEpub, srcComponent, dstComponentDir, creatorName):
 
     #write out the updated manifest
 
-    addComponentPrefix(opfDOM)
+    prefix = opfDOM.get('prefix')
+    if prefix == None:
+        opfDOM.set('prefix', componentNamespace)
+    elif prefix.find(componentNamespace) < 0:
+        opfDOM.set('prefix', prefix + ' ' + componentNamespace)
 
     path = dstEpub.getOpfPath()
 
@@ -255,15 +111,6 @@ def transferMetadata(dstEpub, srcComponent, dstComponentDir, creatorName):
     
     ##print cleanedup
     dstEpub.putfile(path, cleanedup)
-
-
-#---------------------------------------------------------------------------
-def makecopy(dstfile):
-    dstCopy = posixpath.normpath(posixpath.join(posixpath.splitext(dstfile)[0] + ".merged.epub"))
-    if os.path.exists(dstCopy):
-        os.remove(dstCopy)
-    shutil.copyfile(dstfile, dstCopy)
-    return dstCopy
 
 #---------------------------------------------------------------------------
 def parse_args(argv):
