@@ -2,7 +2,11 @@ import xml.dom.minidom as minidom
 
 __author__ = 'wmanis'
 
+#-----------------------------------------------------------------
+def isElement(node):
+    return node.nodeType == node.ELEMENT_NODE
 
+#-----------------------------------------------------------------
 def setAttribute(node, name, value):
     if node.attributes.has_key(name):
         attr = node.attributes[name]
@@ -11,11 +15,13 @@ def setAttribute(node, name, value):
         node.attributes.setNamedItem(attr)
     attr.value = value
 
+#-----------------------------------------------------------------
 def getAttributeValue(node, name):
     if node.attributes.has_key(name):
         return node.attributes[name].value
     return None
 
+#-----------------------------------------------------------------
 def addChildElement(parent, tagname, attrs=None, ns=None):
     node = parent.ownerDocument.createElement(tagname)
     if attrs:
@@ -24,16 +30,19 @@ def addChildElement(parent, tagname, attrs=None, ns=None):
     parent.appendChild(node)
     return node
 
+#-----------------------------------------------------------------
 def addTextNode(parent, text):
     node = parent.ownerDocument.createTextNode(text)
     parent.appendChild(node)
     return node
 
+#-----------------------------------------------------------------
 def addComment(parent, text):
     node = parent.ownerDocument.createComment(text)
     parent.appendChild(node)
     return node
 
+#-----------------------------------------------------------------
 def getAttributes(node):
     attributes = {}
     if node.nodeType == node.ELEMENT_NODE:
@@ -41,6 +50,15 @@ def getAttributes(node):
             attributes[attr[0]] = attr[1]
     return attributes
 
+#-----------------------------------------------------------------
+def getChildElements(node):
+    children = []
+    for child in node.childNodes:
+        if child.nodeType == node.ELEMENT_NODE:
+            children.append(child)
+    return children
+
+#-----------------------------------------------------------------
 def getText(node):
     text = []
 
@@ -54,6 +72,7 @@ def getText(node):
     walk(node, text)
     return ''.join(text)
 
+#-----------------------------------------------------------------
 def removeNode(node):
     parent = node.parentNode
     if parent:

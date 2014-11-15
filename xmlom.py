@@ -8,12 +8,14 @@ class XMLOM:
     def __init__(self, xmltext):
         self.dom_ = minidom.parseString(xmltext)
 
+    #-----------------------------------------------------------------
     def getRootElement(self):
         for child in self.dom_.childNodes:
             if child.nodeType == child.ELEMENT_NODE:
                 return child
         return self.dom_
 
+    #-----------------------------------------------------------------
     def findByID(self, elementid):
         def walk(node, elementid):
             if node.attributes != None:
@@ -30,6 +32,7 @@ class XMLOM:
 
         return walk(self.dom_.documentElement, elementid)
 
+    #-----------------------------------------------------------------
     def findChildrenByTagName(self, node, tagname):
         children = []
         if node.nodeType == node.ELEMENT_NODE:
@@ -38,6 +41,7 @@ class XMLOM:
                     children.append(child)
         return children
 
+    #-----------------------------------------------------------------
     def findAllByTagName(self, tagname):
         def walk(node, tagname, found):
             if node.nodeType == minidom.Element.ELEMENT_NODE:
@@ -51,34 +55,39 @@ class XMLOM:
         walk(self.dom_.documentElement, tagname, found)
         return found
 
+    #-----------------------------------------------------------------
     def setAttribute(self, node, name, value):
         xmlElement.setAttribute(node, name, value)
 
+    #-----------------------------------------------------------------
     def getAttribute(self, node, name):
         return xmlElement.getAttributeValue(node, name)
 
-
+    #-----------------------------------------------------------------
     def getAttributes(self, node):
         return xmlElement.getAttributes(node)
 
-
+    #-----------------------------------------------------------------
     def addChild(self, parent, tagname, attrs=None, ns=None):
         return xmlElement.addChildElement(parent, tagname, attrs, ns)
 
-
+    #-----------------------------------------------------------------
     def addTextNode(self, parent, text):
         return xmlElement.addTextNode(parent, text)
 
+    #-----------------------------------------------------------------
     def addComment(self, parent, data):
         return xmlElement.addComment(parent, data)
 
+    #-----------------------------------------------------------------
     def getText(self, node):
         return xmlElement.getText(node)
 
-
+    #-----------------------------------------------------------------
     def removeNode(self, node):
         xmlElement.removeNode(node)
 
+    #-----------------------------------------------------------------
     def toPrettyXML(self):
         lines = self.dom_.toprettyxml()
         lines = lines.split('\n')

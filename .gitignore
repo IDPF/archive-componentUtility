@@ -3,7 +3,7 @@
 #########################
 
 #ignore epub files
-.epub
+*.epub
 
 
 # git files to ignore
