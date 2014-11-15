@@ -8,10 +8,18 @@ import optparse
 import xml.dom.minidom as minidom
 import zipfile
 import posixpath
-import xml.etree.ElementTree as ET
 import urllib
+import xmlom
+import time
+import xmlElement
 
 __author__ = 'wmanis'
+
+
+componentPrefix = 'component'
+componentDirectory = 'components'
+componentNamespace = 'component: http://www.idpf.org/vocab/component/#'
+opfNamespace = "{http://www.idpf.org/2007/opf}"
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
@@ -26,40 +34,49 @@ class PackageDom:
     # get the manifest
 
     def getManifest(self):
-        return self.getPackageDom().find('./{http://www.idpf.org/2007/opf}manifest')
+        return self.packagedom_.findAllByTagName('manifest')[0]
 
     # ---------------------------------------------------------------------------
     # get the manifest
 
     def getManifestItems(self):
-        items = self.getManifest()
-        return list(items)
+        items = []
+        for item in self.getManifest().childNodes:
+            if item.nodeType == item.ELEMENT_NODE:
+                items.append(item)
 
+        return items
+
+
+    # ---------------------------------------------------------------------------
+    # get the metadata
+
+    def getMetadata(self):
+        return self.packagedom_.findAllByTagName('metadata')[0]
 
     #---------------------------------------------------------------------------
     # get the metadata
 
-    def getMetadata(self):
-        return self.getPackageDom().find('./{http://www.idpf.org/2007/opf}metadata')
-
+    def getMetadataItems(self):
+        return self.packagedom_.findChildrenByTagName(self.getMetadata(), 'meta')
 
     #---------------------------------------------------------------------------
     # get the spine
 
     def getSpine(self):
-        return self.getPackageDom().find('./{http://www.idpf.org/2007/opf}spine')
+        return self.packagedom_.findAllByTagName('spine')[0]
 
     #---------------------------------------------------------------------------
     # get the spine items
 
     def getSpineItems(self):
-        return list(self.getSpine())
+        return self.packagedom_.findChildrenByTagName(self.getSpine(), 'itemref')
 
     #---------------------------------------------------------------------------
     # get the spine items
 
     def getCollections(self):
-        return self.getPackageDom().findall('.//{http://www.idpf.org/2007/opf}collection')
+        return self.packagedom_.findChildrenByTagName(self.packagedom_.getRootElement(), 'collection')
 
 
     #---------------------------------------------------------------------------
@@ -93,16 +110,16 @@ class PackageDom:
         for collection in collections:
             print collection.tag, collection.attrib
 
-
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
 class EPUBZipContainer:
-    def __init__(self, name):
+    def __init__(self, name, debug = True):
         self.name_ = name
         self.zipfile_ = zipfile.ZipFile(name, 'r')
         self.__unzip()
-        self.packagedom_ = None
-        self.packagedom2_ = PackageDom(self.getOpfDom())
+        self.tree_ = None
+        self.packagedom_ = PackageDom(self.getOpfDom())
+        self.debug_ = debug
 
 
     # ---------------------------------------------------------------------------
@@ -113,7 +130,8 @@ class EPUBZipContainer:
         for name in self.names_:
             self.contents_[name] = self.zipfile_.read(name)
 
-     # ---------------------------------------------------------------------------
+            # ---------------------------------------------------------------------------
+
     # update original
     def close(self):
         mergedName = posixpath.normpath(posixpath.join(posixpath.splitext(self.name_)[0] + ".merged.epub"))
@@ -122,7 +140,6 @@ class EPUBZipContainer:
         newzipfile = zipfile.ZipFile(mergedName, 'a')
         for name in self.contents_:
             newzipfile.writestr(name, self.contents_[name])
-
 
 
     # ---------------------------------------------------------------------------
@@ -135,21 +152,20 @@ class EPUBZipContainer:
     # get the path to the opf file from container.xml
 
     def getOpfPath(self):
-        xmlDom = minidom.parseString(self.contents_['META-INF/container.xml'])
-        container = xmlDom.documentElement
-        root = container.getElementsByTagName('rootfile')[0]
-        return root.getAttribute('full-path')
+        xmlDom = xmlom.XMLOM(self.contents_['META-INF/container.xml'])
+        root = xmlDom.findAllByTagName('rootfile')[0]
+        return xmlDom.getAttribute(root, 'full-path')
 
 
-    #---------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
     # get the package xmldom
 
     def getOpfDom(self):
-        path = self.getOpfPath()
-        opfXML = self.contents_[path]
-        tree = ET.fromstring(opfXML)
-        return tree
-
+        if self.tree_ == None:
+            path = self.getOpfPath()
+            opfXML = self.contents_[path]
+            self.tree_ = xmlom.XMLOM(opfXML)
+        return self.tree_
 
     #---------------------------------------------------------------------------
     # get the package xmldom
@@ -163,66 +179,62 @@ class EPUBZipContainer:
     def putfile(self, path, text):
         self.contents_[path] = text
 
-    #---------------------------------------------------------------------------
-    # get the package xmldom
-
-    def getPackageDom(self):
-        if self.packagedom_ == None:
-            path = self.getOpfPath()
-            opfXML = self.contents_[path]
-            self.packagedom_ = xml.dom.minidom.parseString(opfXML).getElementsByTagName('package')[0]
-        return self.packagedom_
-
 
     #---------------------------------------------------------------------------
     # get the manifest
 
     def getOpfManifest(self):
-        return self.packagedom2_.getManifest()
+        return self.packagedom_.getManifest()
+
 
     #---------------------------------------------------------------------------
     # get the manifest
 
     def getOpfManifestItems(self):
-        return self.packagedom2_.getManifestItems()
+        return self.packagedom_.getManifestItems()
+
 
     #---------------------------------------------------------------------------
     # get the metadata
 
     def getOpfMetadata(self):
-        return self.packagedom2_.getMetadata()
-
+        return self.packagedom_.getMetadata()
 
     #---------------------------------------------------------------------------
     # get the spine
 
     def getOpfSpine(self):
-        return self.packagedom2_.getSpine()
+        return self.packagedom_.getSpine()
 
     #---------------------------------------------------------------------------
     # get the spine items
 
     def getOpfSpineItems(self):
-        return self.packagedom2_.getSpineItems()
-
+        return self.packagedom_.getSpineItems()
 
     #---------------------------------------------------------------------------
     def getSpineItemPath(self, xmlid):
         manifest = self.getOpfManifestItems()
 
+        opfDOM = self.getOpfDom()
+
         for item in manifest:
-            if item.get('id') == xmlid:
-                return item.get('href')
+            if opfDOM.getAttribute( item, 'id') == xmlid:
+                return opfDOM.getAttribute(item, 'href')
         return None
 
+
     #---------------------------------------------------------------------------
+
     # get spineitem files
     def getOpfSpineItemFiles(self):
         spinefiles = []
         spineitems = self.getOpfSpineItems()
 
+        opfDOM = self.getOpfDom()
+
         for itemref in spineitems:
-            idref = itemref.get('idref')
+            idref = opfDOM.getAttribute(itemref, 'idref')
             spinefiles.append(self.getSpineItemPath(idref))
 
         return spinefiles
@@ -231,7 +243,7 @@ class EPUBZipContainer:
     # get the spine items
 
     def getOpfCollections(self):
-        return self.packagedom2_.getCollections()
+        return self.packagedom_.getCollections()
 
     #---------------------------------------------------------------------------
     # debug - print out opf
@@ -246,53 +258,165 @@ class EPUBZipContainer:
     # debug - print out opf manifest
 
     def printOpfManifest(self):
-        self.packagedom2_.printManifest()
+        self.packagedom_.printManifest()
 
 
     #---------------------------------------------------------------------------
     # debug - print out opf metadata
 
     def printOpfMetadata(self):
-        self.packagedom2_.printMetadata()
+        self.packagedom_.printMetadata()
 
 
     #---------------------------------------------------------------------------
     # debug - print out opf spine
 
     def printOpfSpine(self):
-        self.packagedom2_.printSpine()
+        self.packagedom_.printSpine()
 
     #---------------------------------------------------------------------------
     # debug - print out opf spine
 
     def printOpfCollections(self):
-        self.packagedom2_.printCollections()
+        self.packagedom_.printCollections()
 
+    def getComponentDir(self, creator, name):
+        return posixpath.normpath(posixpath.join(componentDirectory, creator, name))
+
+    def getComponentRelativePath(self, componentDir):
+        dstOPFPath = self.getOpfPath()
+        return os.path.relpath(componentDir, os.path.dirname(dstOPFPath))
 
     #---------------------------------------------------------------------------
     # transfer component assets and update the destination opf file
-
     def transferItems(self, srcComponent, dstDir):
 
         # get items from manifest for transfer
         itemList = srcComponent.getOpfManifestItems()
 
+        opfDOM = srcComponent.getOpfDom()
+
         srcOpfDir = posixpath.dirname(srcComponent.getOpfPath())
 
         for item in itemList:
-            if item.get('properties') == 'nav':
+            if opfDOM.getAttribute(item, 'properties') == 'nav':
                 #do not copy nav doc
                 continue
 
-            srcPath = posixpath.normpath(posixpath.join(srcOpfDir, item.get('href')))
-            dstPath = posixpath.normpath(posixpath.join(dstDir, item.get('href').split('../').pop()))
+            href = opfDOM.getAttribute(item, 'href')
+            srcPath = posixpath.normpath(posixpath.join(srcOpfDir, href))
+            dstPath = posixpath.normpath(posixpath.join(dstDir, href.split('../').pop()))
 
             # copy the bytes over
             srcbytes = srcComponent.getfile(srcPath)
             self.putfile(dstPath, srcbytes)
 
 
-#------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------
+    # build the collection containing the component
+    def buildCollection(self, dstComponentDir, items,  srcMetadata, idref,vendorName, componentName):
+        opfDOM = self.getOpfDom()
+        commentString = ' start of component ' + vendorName + ' - ' + componentName + ' transfer time ' + time.asctime(time.gmtime()) + ' UTC '
+        xmlElement.addComment(opfDOM.getRootElement(), commentString)
+
+        collection = opfDOM.addChild(opfDOM.getRootElement(), 'collection', {'role' : 'component:component'})
+        metadata = opfDOM.addChild(collection, 'metadata')
+
+
+        for datum in srcMetadata:
+            meta = opfDOM.addChild(metadata, 'meta')
+            opfDOM.setAttribute(meta, 'property', datum['property'])
+            opfDOM.addTextNode(meta, datum['value'])
+
+
+
+        collectionManifest = opfDOM.addChild(collection, 'collection', {'role' : 'manifest'})
+        component = None
+
+
+        for item in items:
+            link = opfDOM.addChild(collectionManifest, "link")
+            if idref == opfDOM.getAttribute(item, 'id'):
+                component = item
+
+            #link.set('id', creatorName + item.get('id'))
+
+            href = opfDOM.getAttribute(item, 'href')
+            print href
+            href = posixpath.normpath(posixpath.join(dstComponentDir, href))
+            print href
+            opfDOM.setAttribute(link, 'href', href)
+
+
+        link = opfDOM.addChild(collection, 'link')
+        href = posixpath.normpath(posixpath.join(dstComponentDir, opfDOM.getAttribute(component, 'href')))
+        opfDOM.setAttribute(link, 'href', href)
+
+    #---------------------------------------------------------------------------
+    # add the component items to the manifest
+    def addManifestItems(self, dstComponentDir, items, vendorName, componentName):
+        print 'addManifestItems'
+        dstManifest = self.getOpfDom().findAllByTagName('manifest')[0]
+
+        xmlElement.addComment(dstManifest, ' start of component manifest items ' + vendorName + ' - ' + componentName + ' ')
+
+        for item in items:
+            newitem = xmlElement.addChildElement(dstManifest, item.localName)
+
+            attributes = xmlElement.getAttributes(item)
+
+            for attr in attributes:
+                value = attributes[attr]
+                if attr == 'href':
+                    href = posixpath.normpath(posixpath.join(dstComponentDir, value))
+                    xmlElement.setAttribute(newitem, 'href', href)
+                elif attr != 'id':
+                    xmlElement.setAttribute(newitem, attr, value)
+                else:
+                    xmlElement.setAttribute( newitem, attr, 'foo_' + value)
+
+        xmlElement.addComment(dstManifest, ' end of component manifest items ' + vendorName + ' - ' + componentName + ' ')
+
+    # transfer data into the destintation package file
+    def transferMetadata(self, srcComponent, dstComponentDir, vendorName, componentName):
+
+        opfDOM = self.getOpfDom()
+
+
+        items = srcComponent.getOpfManifestItems()
+        for item in items:
+            if opfDOM.getAttribute(item, 'properties') == 'nav':
+                items.remove(item)
+                break
+
+
+        srcMetadata = srcComponent.getComponentMetadata()
+
+        srcSpineItems = srcComponent.getOpfSpineItems()
+        assert(len(srcSpineItems) == 1)
+        idref = opfDOM.getAttribute(srcSpineItems[0], 'idref')
+
+
+        self.buildCollection(dstComponentDir, items,  srcMetadata, idref, vendorName, componentName)
+        self.addManifestItems(dstComponentDir, items,  vendorName, componentName)
+
+        if self.debug_:
+            print opfDOM.toPrettyXML()
+
+        # ensure component vocab is present
+        package = opfDOM.getRootElement()
+        prefix = opfDOM.getAttribute(package, 'prefix')
+        if prefix == None:
+            opfDOM.setAttribute(package, 'prefix', componentNamespace)
+        elif prefix.find(componentNamespace) < 0:
+            opfDOM.setAttribute(package, 'prefix', prefix + ' ' + componentNamespace)
+
+
+        #write out the updated manifest
+        ##print cleanedup
+        self.putfile(self.getOpfPath(), opfDOM.toPrettyXML())
+
+# ------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
 class EPUBSpineItem:
     def __init__(self, zipfile, path):
@@ -341,7 +465,6 @@ class EPUBSpineItem:
     def update(self):
         self.zipfile_.putfile(self.path_, self.tostring())
 
-
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
 class ComponentZipContainer(EPUBZipContainer):
@@ -352,11 +475,15 @@ class ComponentZipContainer(EPUBZipContainer):
     # get the component metadata from the opf
     def getComponentMetadata(self):
         componentMetadatum = []
-        metadataItems = self.getOpfMetadata().findall('./{http://www.idpf.org/2007/opf}meta')
+
+        metadataItems = self.packagedom_.getMetadataItems()
         for meta in metadataItems:
-            if meta.attrib['property']:
-                componentMetadatum.append({'property': meta.attrib['property'], 'value': meta.text})
+            prop = self.getOpfDom().getAttribute(meta, 'property')
+            if prop != None:
+                componentMetadatum.append({'property': prop, 'value': self.getOpfDom().getText(meta)})
+
         return componentMetadatum
+
 
     # get the component metadata from the opf
     def getComponentManifest(self):
@@ -366,11 +493,13 @@ class ComponentZipContainer(EPUBZipContainer):
             componentManifest.append({'property': item.get('property'), 'value': item.text})
         return componentManifest
 
+
     # get component base html
     def getComponentHTML(self):
         return self.getOpfSpineItemFiles()[0]
 
-    #---------------------------------------------------------------------------    
+
+    #---------------------------------------------------------------------------
     # get the component creator and name from the meta properties
 
     def getComponentCreatorAndName(self):
@@ -388,14 +517,6 @@ class ComponentZipContainer(EPUBZipContainer):
                 name = meta['value']
 
         return {'creator': urllib.quote(creator), 'name': urllib.quote(name)}
-
-
-def makeQName(ns, tag):
-    return '{' + ns + '}' + tag
-
-
-def splitQName(name):
-    return name.split('{')[1].split('}')
 
 
 #---------------------------------------------------------------------------

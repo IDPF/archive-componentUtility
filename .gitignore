@@ -2,7 +2,11 @@
 ####     GENERAL     ####
 #########################
 
-# git files we don't want in webr
+#ignore epub files
+.epub
+
+
+# git files to ignore
 .gitattributes
 
 # maven build outputs
