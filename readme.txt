@@ -1,16 +1,51 @@
 You will need python v2.7, should exist on Macs, Windows may require an install.
 
-Execute 'python componentInstaller.py', this defaults to transferring
-the 2 components in the components directory into a copy of the
-epub/componentContainer.epub.
+This is alpha software, largely untested.
 
-Or you can execute 'python componentInstaller.py dst.epub component.epub component2.epub ...'
+The goal is to use this to learn and validate our ideas around EPUB Scriptable Component Packaging Specification.
 
-Notes:
+Implementation notes:
+    All xml processing is done using xml.dom.minidom, all calls to minidom are hidden behind xmlom and xmlelement.
+    No doubt we will have to move to more robust xml (html?) processing, as such I hope to have made the
+    transition to another xml/html implementation tractable.
 
-components/gallery.epub - has the structure that Garth proposed
-components/gallery2.epub - has a more conventional structure 
+There are two directories in this project containing files for a container epub and two component epubs. These are the
+only files used for test cases for far :-(. The files in here can be used to create epubs using epubcheck or the following
+bash script:
 
-I have opted not to rely on the directory structure in the epub, but
-rather on the component:creator and component:name to creat the destination
-directory.
+    function createpub()
+    {
+        rm -f $@.epub;
+        cd $@
+        zip -q0X ../$@.epub mimetype;
+        zip -qXr9D ../$@.epub *
+        cd ..
+    }
+
+Run this in the parent directory containing the epub
+(e.g. cd epub; createpub componentContainer; epubcheck componentContainer.epub)
+
+
+Component Utility
+
+Utility for integrating, listing, checking and extracting EPUB components
+
+
+    Examples:
+        componentUtility -i component.epub book.epub
+            integrates component.epub into a copy of book.epub named book.merged.epub
+
+        componentUtility -I component.epub book.epub OPS/chap.xhtml component1
+            integrates component.epub into a copy of book.epub named book.merged.epub
+            and updates iframe element id='component1' in chap.xhtml
+
+        componentUtility -l book.epub
+            lists components contained in book.epub
+
+        componentUtility -c component.epub
+            checks component.epub to ensure that it is a valid component
+
+        componentUtility -x book.epub creator componentName
+            extracts the component with creator & componentName to creator_componentName.extracted.epub
+            which should be a valid component epub
+

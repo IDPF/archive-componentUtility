@@ -2,9 +2,36 @@
 
 from __future__ import with_statement
 
+__license__ = """
+    Copyright (c) 2014, Will Manis
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+    1. Redistributions of source code must retain the above copyright notice, this
+       list of conditions and the following disclaimer.
+    2. Redistributions in binary form must reproduce the above copyright notice,
+       this list of conditions and the following disclaimer in the documentation
+       and/or other materials provided with the distribution.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+    ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+    DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+    ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+    LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+    ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+    The views and conclusions contained in the software and documentation are those
+    of the authors and should not be interpreted as representing official policies,
+    either expressed or implied, of the FreeBSD Project.
+"""
+
 import os
-import sys
-import optparse
 import zipfile
 import posixpath
 import urllib
@@ -14,10 +41,79 @@ import xmlElement
 
 __author__ = 'wmanis'
 
-componentPrefix = 'component'
 componentDirectory = 'components'
 componentNamespace = 'component: http://www.idpf.org/vocab/component/#'
-opfNamespace = "{http://www.idpf.org/2007/opf}"
+
+
+def getCollectionCreatorAndName(collection):
+    creatorName = { 'creator': None, 'name' : None }
+
+    metadata = xmlom.findChildrenByTagName(collection, 'metadata')
+    if len(metadata) == 1:
+        metas = xmlom.findChildrenByTagName(metadata[0], 'meta')
+        for meta in metas:
+            propval = xmlElement.getAttributeValue(meta, 'property')
+            if propval == "component:creator":
+                creatorName['creator'] =  xmlElement.getText(meta)
+            elif propval == "component:name":
+                creatorName['name'] =  xmlElement.getText(meta)
+    return creatorName
+
+#---------------------------------------------------------------------------
+def getComponentDir(creator, name):
+    return posixpath.normpath(posixpath.join(componentDirectory, creator, name))
+
+# ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+class EPUBSpineItem:
+    def __init__(self, zipfile, path):
+        self.zipfile_ = zipfile
+        self.path_ = path
+        self.spineXML_ = xmlom.XMLOM(self.zipfile_.getBytes(path))
+
+    def insert(self, elementID, src):
+        def walk(node, elementid):
+            attributes = xmlElement.getAttributes(node)
+            for attr in attributes:
+                if attr == 'id' and attributes[attr] == elementid:
+                    return node
+
+            children = xmlElement.getChildElements(node)
+            for child in children:
+                id = walk(child, elementid)
+                if id != None:
+                    return id
+            return None
+
+        node = walk(self.spineXML_.getRootElement(), elementID)
+        if node != None:
+            xmlElement.setAttribute(node, 'src', src)
+            return
+
+        raise "no element with that id"
+
+
+    def tostring(self):
+        lines = self.spineXML_.toPrettyXML()
+        lines = lines.split('\n')
+
+        trimmedlines = []
+        for line in lines:
+            line = line.rstrip()
+            if len(line) != 0:
+                trimmedlines.append(line)
+
+        print "\n\nPatched html file\n==============================================="
+        print "==============================================="
+        print '\n'.join(trimmedlines)
+        print "==============================================="
+        print "===============================================\n\n"
+        return '\n'.join(trimmedlines)
+
+
+    def update(self):
+        self.zipfile_.putfile(self.path_, self.tostring())
+
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
@@ -29,7 +125,7 @@ class PackageDom(xmlom.XMLOM):
     # get the manifest
 
     def getManifest(self):
-        return self.findAllByTagName('manifest')[0]
+        return self.findChildrenByTagName(self.getRootElement(), 'manifest')[0]
 
     # ---------------------------------------------------------------------------
     # get the manifest
@@ -68,54 +164,80 @@ class PackageDom(xmlom.XMLOM):
         return self.findChildrenByTagName(self.getSpine(), 'itemref')
 
     #---------------------------------------------------------------------------
-    # get the spine items
+    # get the collections
 
     def getCollections(self):
-        return self.findChildrenByTagName(self.packagedom_.getRootElement(), 'collection')
+        return self.findChildrenByTagName(self.getRootElement(), 'collection')
 
-    #
-    # #---------------------------------------------------------------------------
-    # # debug - print out opf manifest
-    #
-    # def printManifest(self):
-    #     for child in self.getManifest():
-    #         print child.tag, child.attrib
-    #
-    #
-    # #---------------------------------------------------------------------------
-    # # debug - print out opf metadata
-    #
-    # def printMetadata(self):
-    #     for child in self.getMetadata():
-    #         print child.tag, child.attrib
-    #
-    # #---------------------------------------------------------------------------
-    # # debug - print out opf spine
-    #
-    # def printSpine(self):
-    #     for child in self.getSpine():
-    #         print child.tag, child.attrib
-    #
-    # #---------------------------------------------------------------------------
-    # # debug - print out opf spine
-    #
-    # def printCollections(self):
-    #     collections = self.getCollections()
-    #     for collection in collections:
-    #         print collection.tag, collection.attrib
-    #
+    #---------------------------------------------------------------------------
+    # get the component collections
+
+    def getComponentCollections(self):
+        collections = self.getCollections()
+        found = 0
+
+        for collection in collections:
+           if xmlElement.getAttributeValue(collection, 'role') != 'component:component':
+               collections.remove(collection)
+        return collections
+
+    #---------------------------------------------------------------------------
+    # get a component collection
+
+    def getComponentCollection(self, vendor, componentName):
+        collections = self.getCollections()
+        found = 0
+
+        for collection in collections:
+            metadata = self.findChildrenByTagName(collection, 'metadata')
+            if len(metadata) == 1:
+                metas = self.findChildrenByTagName(metadata[0], 'meta')
+                for meta in metas:
+                    #<meta property="component:creator">Acme</meta>
+                    #<meta property="component:name">Gallery_example</meta>
+                    propval = xmlElement.getAttributeValue(meta, 'property')
+                    if propval == "component:creator" and xmlElement.getText(meta) == vendor:
+                        found += 1
+                    elif propval == "component:name" and xmlElement.getText(meta) == componentName:
+                        found += 1
+                    if found == 2:
+                        return collection
+        return None
+
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
 class EPUBZipContainer:
-    def __init__(self, name, debug=True):
+
+
+    def __init__(self, name, opt = 'r', debug=False):
         self.name_ = name
-        self.zipfile_ = zipfile.ZipFile(name, 'r')
+        self.zipfile_ = zipfile.ZipFile(name, opt)
         self.__unzip()
         self.opfpath_ = None
+
+        if len(self.names_) == 0:
+            # this is a blank epub, need to create an opf file and meta-inf
+            self.createMetaInf()
+            self.createPackageFile()
+
         self.getOpfPath()
-        self.debug_ = debug
         self.packagedom_ = PackageDom(self.contents_[self.opfpath_])
+
+        self.debug_ = debug
+
+
+    # ------------------------------------------------------------------------------
+    # interface definition
+
+    def createMetaInf(self):
+        pass
+
+    # ------------------------------------------------------------------------------
+    # interface definition
+
+    def createPackageFile(self):
+        pass
 
 
     # ---------------------------------------------------------------------------
@@ -126,14 +248,17 @@ class EPUBZipContainer:
         for name in self.names_:
             self.contents_[name] = self.zipfile_.read(name)
 
-            # ---------------------------------------------------------------------------
-
+    # ---------------------------------------------------------------------------
     # update original
     def close(self):
         mergedName = posixpath.normpath(posixpath.join(posixpath.splitext(self.name_)[0] + ".merged.epub"))
         if os.path.exists(mergedName):
             os.remove(mergedName)
         newzipfile = zipfile.ZipFile(mergedName, 'a')
+
+        newzipfile.writestr('mimetype', self.contents_['mimetype'])
+        self.contents_.pop('mimetype')
+
         for name in self.contents_:
             newzipfile.writestr(name, self.contents_[name])
 
@@ -246,34 +371,7 @@ class EPUBZipContainer:
         opfXML = self.contents_[path]
         print opfXML
 
-
     #---------------------------------------------------------------------------
-    # debug - print out opf manifest
-
-    def printOpfManifest(self):
-        self.packagedom_.printManifest()
-
-
-    #---------------------------------------------------------------------------
-    # debug - print out opf metadata
-
-    def printOpfMetadata(self):
-        self.packagedom_.printMetadata()
-
-
-    #---------------------------------------------------------------------------
-    # debug - print out opf spine
-
-    def printOpfSpine(self):
-        self.packagedom_.printSpine()
-
-    #---------------------------------------------------------------------------
-    # debug - print out opf spine
-    def printOpfCollections(self):
-        self.packagedom_.printCollections()
-
-    def getComponentDir(self, creator, name):
-        return posixpath.normpath(posixpath.join(componentDirectory, creator, name))
 
     def getComponentRelativePath(self, componentDir):
         dstOPFPath = self.getOpfPath()
@@ -281,6 +379,7 @@ class EPUBZipContainer:
 
     #---------------------------------------------------------------------------
     # transfer component assets and update the destination opf file
+
     def transferItems(self, srcComponent, dstDir):
 
         # get items from manifest for transfer
@@ -333,13 +432,9 @@ class EPUBZipContainer:
             if idref == xmlElement.getAttributeValue(item, 'id'):
                 component = item
 
-            #link.set('id', creatorName + item.get('id'))
-
             href = xmlElement.getAttributeValue(item, 'href')
-            print href
-            href = posixpath.normpath(posixpath.join(dstComponentDir, href))
-            print href
-            xmlElement.setAttribute(link, 'href', href)
+            dstPath = posixpath.normpath(posixpath.join(dstComponentDir, href))
+            xmlElement.setAttribute(link, 'href', dstPath)
 
 
         # add the html of the component
@@ -359,6 +454,8 @@ class EPUBZipContainer:
         xmlElement.addComment(dstManifest,
                               ' start of component manifest items ' + vendorName + ' - ' + componentName + ' ')
 
+        idprefix = vendorName + '_' + componentName + '_'
+
         for item in items:
             newitem = xmlElement.addChildElement(dstManifest, item.localName)
 
@@ -372,10 +469,9 @@ class EPUBZipContainer:
                 elif attr != 'id':
                     xmlElement.setAttribute(newitem, attr, value)
                 else:
-                    xmlElement.setAttribute(newitem, attr, 'foo_' + value)
+                    xmlElement.setAttribute(newitem, attr, idprefix + value)
 
         # add comment to indicate end of component items
-
         xmlElement.addComment(dstManifest,
                               ' end of component manifest items ' + vendorName + ' - ' + componentName + ' ')
 
@@ -411,59 +507,23 @@ class EPUBZipContainer:
             xmlElement.setAttribute(package, 'prefix', prefix + ' ' + componentNamespace)
 
         if self.debug_:
+            print "\n\nIntegrated package file\n==============================================="
+            print "==============================================="
             print self.packagedom_.toPrettyXML()
-
+            print "==============================================="
+            print "===============================================\n\n"
         # write out the updated manifest
         self.putfile(self.getOpfPath(), self.packagedom_.toPrettyXML())
 
+    def testComponentExistance(self, creator, name ):
+        collections = self.packagedom_.getComponentCollections()
 
-# ------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------
-class EPUBSpineItem:
-    def __init__(self, zipfile, path):
-        self.zipfile_ = zipfile
-        self.path_ = path
-        self.spineXML_ = xmlom.XMLOM(self.zipfile_.getBytes(path))
+        for collection in collections:
+            creatorname = getCollectionCreatorAndName(collection)
+            if creatorname['creator'] == creator and  creatorname['name'] == name:
+                return True
 
-    def insert(self, elementID, src):
-        def walk(node, elementid):
-            attributes = xmlElement.getAttributes(node)
-            for attr in attributes:
-                if attr == 'id' and attributes[attr] == elementid:
-                    return node
-
-            children = xmlElement.getChildElements(node)
-            for child in children:
-                id = walk(child, elementid)
-                if id != None:
-                    return id
-            return None
-
-        node = walk(self.spineXML_.getRootElement(), elementID)
-        if node != None:
-            xmlElement.setAttribute(node, 'src', src)
-            return
-
-        raise "no element with that id"
-
-
-    def tostring(self):
-        lines = self.spineXML_.toPrettyXML()
-        lines = lines.split('\n')
-
-        trimmedlines = []
-        for line in lines:
-            line = line.rstrip()
-            if len(line) != 0:
-                trimmedlines.append(line)
-
-        print '\n'.join(trimmedlines)
-        return '\n'.join(trimmedlines)
-
-
-    def update(self):
-        self.zipfile_.putfile(self.path_, self.tostring())
-
+        return False
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -471,8 +531,101 @@ class ComponentZipContainer(EPUBZipContainer):
     prefix = 'component'
     namespace = 'component:http://www.idpf.org/vocab/component/#'
 
+    #------------------------------------------------------------------------------
 
+    def __init__(self, name, creator = None, componentName = None, debug=True):
+        self.creator_ = creator
+        self.componentName_ = componentName
+        if self.creator_ == None:
+            opt = 'r'
+        else:
+            opt = 'a'
+        EPUBZipContainer.__init__(self, name, opt, debug)
+
+    #------------------------------------------------------------------------------
+    # create the metainf for this epub
+
+    def createMetaInf(self):
+        # TODO verify this is correct
+        opfpath = '"' + posixpath.normpath(posixpath.join(self.componentName_, 'content.opf')) + '"'
+        blank_metainf = """<?xml version="1.0" encoding="UTF-8"?>
+<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0">
+   <rootfiles>
+      <rootfile full-path=""" + opfpath + """ media-type="application/oebps-package+xml"/>
+   </rootfiles>
+</container>"""
+        self.contents_['META-INF/container.xml'] = blank_metainf
+
+    #------------------------------------------------------------------------------
+    # create a boiler plate package file, to be filled in with real data
+
+    def createPackageFile(self):
+        blank_packagefile = """<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" xml:lang="en" unique-identifier="uid"
+	 prefix="component: http://www.idpf.org/vocab/component/#">
+   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+   </metadata>
+   <manifest>
+   </manifest>
+   <spine>
+   </spine>
+</package>"""
+
+        self.contents_[posixpath.normpath(posixpath.join(self.componentName_, 'content.opf'))] = blank_packagefile
+
+    #------------------------------------------------------------------------------
     # get the component metadata from the opf
+
+    def extract(self, srcEpub):
+        print "Extract: ", self.creator_, self.componentName_
+        collection = srcEpub.packagedom_.getComponentCollection(self.creator_, self.componentName_)
+        self.copyMetadata(collection)
+
+
+        self.buildManifest(collection)
+
+
+    #------------------------------------------------------------------------------
+    # copy over meta data
+
+    def copyMetadata(self, collection):
+        srcMetadata = xmlElement.findFirstChildElement(collection, 'metadata')
+        srcMetadatas = xmlElement.getChildElements(srcMetadata)
+
+        dstMetadata = self.packagedom_.getMetadata()
+
+        for meta in srcMetadatas:
+            newmeta = xmlElement.addChildElement(dstMetadata, meta.localName, xmlElement.getAttributes(meta))
+            xmlElement.addTextNode(newmeta, xmlElement.getText(meta))
+
+        #print xmlElement.toPrettyXML(srcMetadata)
+
+
+
+    #------------------------------------------------------------------------------
+    # copy over meta data
+
+    def buildManifest(self, collection):
+        srcManifest = xmlElement.findFirstChildElement(collection, 'collection', {'role': 'manifest'})
+        manifestitems = xmlElement.getChildElements(srcManifest)
+
+        dstManifest = self.packagedom_.getManifest()
+
+        for item in manifestitems:
+            newitem = xmlElement.addChildElement(dstManifest, item.localName, xmlElement.getAttributes(item))
+            # TODO make more robust
+            href = xmlElement.getAttributeValue(newitem, 'href')
+            parts = href.split(self.creator_ + '/')
+            xmlElement.setAttribute(newitem, 'href', parts[1])
+
+
+        #print xmlElement.toPrettyXML(dstManifest)
+
+
+
+    #------------------------------------------------------------------------------
+    # get the component metadata from the opf
+
     def getComponentMetadata(self):
         componentMetadatum = []
 
@@ -484,8 +637,9 @@ class ComponentZipContainer(EPUBZipContainer):
 
         return componentMetadatum
 
-
+    #------------------------------------------------------------------------------
     # get the component metadata from the opf
+
     def getComponentManifest(self):
         componentManifest = []
         manifestItems = self.getOpfManifestItems()
@@ -493,8 +647,9 @@ class ComponentZipContainer(EPUBZipContainer):
             componentManifest.append({'property': item.get('property'), 'value': item.text})
         return componentManifest
 
-
+    #------------------------------------------------------------------------------
     # get component base html
+
     def getComponentHTML(self):
         return self.getOpfSpineItemFiles()[0]
 
@@ -506,63 +661,25 @@ class ComponentZipContainer(EPUBZipContainer):
         creatorProp = self.prefix + ":creator"
         nameProp = self.prefix + ":name"
 
-        creator = 'unknown'
-        name = 'unknown'
+        metadata = self.getComponentMetadata()
+        for meta in metadata:
+            if meta['property'] == creatorProp:
+                self.creator_ = meta['value']
+            if meta['property'] == nameProp:
+                self.componentName_ = meta['value']
+
+        return {'creator': urllib.quote(self.creator_), 'name': urllib.quote(self.componentName_)}
+
+    #---------------------------------------------------------------------------
+    # get the component creator and name from the meta properties
+
+    def setComponentCreatorAndName(self, creator, name):
+        creatorProp = self.prefix + ":creator"
+        nameProp = self.prefix + ":name"
 
         metadata = self.getComponentMetadata()
         for meta in metadata:
             if meta['property'] == creatorProp:
-                creator = meta['value']
+                meta['value'] = creator
             if meta['property'] == nameProp:
-                name = meta['value']
-
-        return {'creator': urllib.quote(creator), 'name': urllib.quote(name)}
-
-
-#---------------------------------------------------------------------------
-def parse_args(argv):
-    usage = """
-Usage: %s [FILE] [OPTIONS]...
-Transfers components to epub, currently does not integrate component into destination XHTML
-"""[1:-1] % os.path.basename(argv[0])
-
-    parser = optparse.OptionParser(usage=usage)
-    return parser.parse_args(argv[1:])
-
-
-#---------------------------------------------------------------------------
-def main(argv):
-    options, args = parse_args(argv)
-
-    if len(args) > 1:
-        epubs = args
-    else:
-        epubs = ['epub/componentContainer.epub']
-
-    try:
-        # transfer components to destination epub
-        for epub in epubs:
-            epubzip = zipfile.ZipFile(epub, 'r')
-
-            container = EPUBZipContainer(epubzip)
-
-            spineitem = EPUBSpineItem(container, 'OPS/componentContainer.html')
-            print spineitem.tostring()
-            spineitem.insert("component1", "foo.html")
-            print spineitem.tostring()
-
-
-
-    except Exception as e:
-        print'\n\n================================================'
-        print e.message
-        print'================================================\n\n'
-        return -1
-    except:
-        print "Unknown Error:", sys.exc_info()[0]
-        return -1
-
-
-#---------------------------------------------------------------------------
-if __name__ == '__main__':
-    ret = main(sys.argv)
+                meta['value'] = name
