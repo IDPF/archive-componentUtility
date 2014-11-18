@@ -49,3 +49,6 @@ Utility for integrating, listing, checking and extracting EPUB components
             extracts the component with creator & componentName to creator_componentName.extracted.epub
             which should be a valid component epub
 
+
+See license.txt for license, the license does not apply to the test epubs and their files which may have their own
+licenses.
