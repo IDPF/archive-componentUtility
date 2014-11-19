@@ -35,12 +35,10 @@ __license__ = """
 
 
 
-import os
 import sys
 import posixpath
 import argparse
-import shutil
-import time
+import xmlElement
 import epubUtil
 
 app_name_ = "Component Utility "
@@ -70,17 +68,17 @@ examples_ = """
 #---------------------------------------------------------------------------
 def listComponents(epubFile):
     epub = epubUtil.EPUBZipContainer(epubFile)
-    collections = epub.packagedom_.getComponentCollections()
+    collections = epub.getOpfDom().getComponentCollections()
 
-    print 'List of installed components'
+    print '\n  List of installed components'
     for collection in collections:
         creatorname = epubUtil.getCollectionCreatorAndName(collection)
         print '    Component creator: "' + creatorname['creator'] + '" - name: "' + creatorname['name'] + '"'
-    print "Done"
+    print "  Done"
 
 
 #---------------------------------------------------------------------------
-def installComponent(dstEpubFile, componentFile, spineitem, elementId):
+def installComponent(dstEpubFile, componentFile, spineitem = None, elementId = None):
 
     # open source component epub and get vendor and component name
     srcComponent = epubUtil.ComponentZipContainer(componentFile)
@@ -121,7 +119,44 @@ def installComponent(dstEpubFile, componentFile, spineitem, elementId):
 
 #---------------------------------------------------------------------------
 def checkComponent(epub):
-    print 'NYI'
+    print '\n    Checking component epub: "' + epub + '"\n'
+    valid = True
+
+    # check creator and name
+    srcComponent = epubUtil.ComponentZipContainer(epub)
+    componentCreator = srcComponent.getComponentCreatorAndName()
+
+    if componentCreator['creator'] != None and componentCreator['name'] != None:
+        print '    Creator:', componentCreator['creator'], '   name:', componentCreator['name']
+    else:
+        print '    No creator and/or component name'
+        valid = False
+
+    # check that version is present
+    version = None
+
+    vitem = srcComponent.getOpfDom().getOpfMetadataItemsByAttr('property', 'component:version')
+
+    if len(vitem) > 0:
+        version = xmlElement.getText(vitem[0])
+        print '    Version: ', version
+    else:
+        print '    No version'
+        valid = False
+
+
+    # check number of spineitems
+    spineItems = srcComponent.getOpfDom().getSpineItems()
+    if len(spineItems) == 1:
+        print '    spine items:', len(spineItems)
+    else:
+        print '    Too many spine items, which one is the widget?'
+        valid = False
+
+    if valid == False:
+        print "\n    INVALID COMPONENT EPUB"
+    else:
+         print "\n    VALID COMPONENT EPUB (limited testing)"
 
 #---------------------------------------------------------------------------
 def extractComponent(epub, creator, componentName):
@@ -166,11 +201,11 @@ def main(argv):
             return
 
         if args.l:
-            print 'list', args.l
+            # print 'list', args.l
             epubFile = args.l[0]
             listComponents(epubFile)
         elif args.c:
-            print 'check', args.c
+            #print 'check', args.c
             epubFile = args.c[0]
             checkComponent(epubFile)
         elif args.i:

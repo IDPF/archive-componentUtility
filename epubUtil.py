@@ -152,6 +152,31 @@ class PackageDom(xmlom.XMLOM):
         return self.findChildrenByTagName(self.getMetadata(), 'meta')
 
     #---------------------------------------------------------------------------
+    # get the metadata with attr & value
+
+    def getOpfMetadataItemsByAttr(self, name, value = None):
+        items = []
+
+        metadataitems = self.getMetadataItems()
+
+        for item in metadataitems:
+            itemValue = xmlElement.getAttributeValue(item, name)
+            if itemValue == None:
+                # no attribute with that value - continue
+                continue
+            elif value == None:
+                # we don't care about value, so this is a match
+                items.append(item)
+            elif itemValue == value:
+                # we care about, so this is a match
+                items.append(item)
+            # elif itemValue!= value:
+            #   this is not a match
+
+        return items
+
+
+    #---------------------------------------------------------------------------
     # get the spine
 
     def getSpine(self):
@@ -405,7 +430,7 @@ class EPUBZipContainer:
     # build the collection containing the component
 
     def buildCollection(self, dstComponentDir, items, srcMetadata, idref, vendorName, componentName):
-        rootElement = self.packagedom_.getPackageElement()
+        rootElement = self.getOpfDom().getPackageElement()
 
         # add comment
         commentString = ' start of component ' + vendorName + ' - ' + componentName + ' transfer time ' + time.asctime(
@@ -499,7 +524,7 @@ class EPUBZipContainer:
         self.addManifestItems(dstComponentDir, items, vendorName, componentName)
 
         # ensure component vocab is present
-        package = self.packagedom_.getPackageElement()
+        package = self.getOpfDom().getPackageElement()
         prefix = xmlElement.getAttributeValue(package, 'prefix')
         if prefix == None:
             xmlElement.setAttribute(package, 'prefix', componentNamespace)
@@ -509,14 +534,14 @@ class EPUBZipContainer:
         if self.debug_:
             print "\n\nIntegrated package file\n==============================================="
             print "==============================================="
-            print self.packagedom_.toPrettyXML()
+            print self.getOpfDom().toPrettyXML()
             print "==============================================="
             print "===============================================\n\n"
         # write out the updated manifest
-        self.putfile(self.getOpfPath(), self.packagedom_.toPrettyXML())
+        self.putfile(self.getOpfPath(), self.getOpfDom().toPrettyXML())
 
     def testComponentExistance(self, creator, name ):
-        collections = self.packagedom_.getComponentCollections()
+        collections = self.getOpfDom().getComponentCollections()
 
         for collection in collections:
             creatorname = getCollectionCreatorAndName(collection)
@@ -578,7 +603,7 @@ class ComponentZipContainer(EPUBZipContainer):
 
     def extract(self, srcEpub):
         print "Extract: ", self.creator_, self.componentName_
-        collection = srcEpub.packagedom_.getComponentCollection(self.creator_, self.componentName_)
+        collection = srcEpub.getOpfDom().getComponentCollection(self.creator_, self.componentName_)
         self.copyMetadata(collection)
 
 
@@ -592,7 +617,7 @@ class ComponentZipContainer(EPUBZipContainer):
         srcMetadata = xmlElement.findFirstChildElement(collection, 'metadata')
         srcMetadatas = xmlElement.getChildElements(srcMetadata)
 
-        dstMetadata = self.packagedom_.getMetadata()
+        dstMetadata = self.getOpfDom().getMetadata()
 
         for meta in srcMetadatas:
             newmeta = xmlElement.addChildElement(dstMetadata, meta.localName, xmlElement.getAttributes(meta))
@@ -609,7 +634,7 @@ class ComponentZipContainer(EPUBZipContainer):
         srcManifest = xmlElement.findFirstChildElement(collection, 'collection', {'role': 'manifest'})
         manifestitems = xmlElement.getChildElements(srcManifest)
 
-        dstManifest = self.packagedom_.getManifest()
+        dstManifest = self.getOpfDom().getManifest()
 
         for item in manifestitems:
             newitem = xmlElement.addChildElement(dstManifest, item.localName, xmlElement.getAttributes(item))
@@ -629,7 +654,7 @@ class ComponentZipContainer(EPUBZipContainer):
     def getComponentMetadata(self):
         componentMetadatum = []
 
-        metadataItems = self.packagedom_.getMetadataItems()
+        metadataItems = self.getOpfDom().getMetadataItems()
         for meta in metadataItems:
             prop = xmlElement.getAttributeValue(meta, 'property')
             if prop != None:
@@ -668,8 +693,10 @@ class ComponentZipContainer(EPUBZipContainer):
             if meta['property'] == nameProp:
                 self.componentName_ = meta['value']
 
-        return {'creator': urllib.quote(self.creator_), 'name': urllib.quote(self.componentName_)}
+        if self.creator_ != None and self.componentName_ != None:
+            return {'creator': urllib.quote(self.creator_), 'name': urllib.quote(self.componentName_)}
 
+        return {'creator': None, 'name': None }
     #---------------------------------------------------------------------------
     # get the component creator and name from the meta properties
 
