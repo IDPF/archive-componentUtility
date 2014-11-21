@@ -36,6 +36,7 @@ __license__ = """
 
 
 import sys
+import os
 import posixpath
 import argparse
 import xmlElement
@@ -78,20 +79,20 @@ def listComponents(epubFile):
 
 
 #---------------------------------------------------------------------------
-def installComponent(dstEpubFile, componentFile, spineitem = None, elementId = None):
+def installComponent(dstEpubFile, componentFile, outputFilename, spineitem = None, elementId = None):
 
     # open source component epub and get vendor and component name
     srcComponent = epubUtil.ComponentZipContainer(componentFile)
     componentCreator = srcComponent.getComponentCreatorAndName()
 
-    print "Install component:", componentCreator['creator'], componentCreator['name']
+    print "    Install component:", componentCreator['creator'], componentCreator['name']
 
     # open destination epub and determine component directory and relative path from
     # package file
     dstEpub = epubUtil.EPUBZipContainer(dstEpubFile)
 
     if dstEpub.testComponentExistance(componentCreator['creator'], componentCreator['name']):
-        print "Already installed"
+        print "    Already installed"
         return
 
     dstComponentDir = epubUtil.getComponentDir(componentCreator['creator'], componentCreator['name'])
@@ -113,9 +114,9 @@ def installComponent(dstEpubFile, componentFile, spineitem = None, elementId = N
         dstSpineItem.update()
 
     # write out the contents and close the epub
-    dstEpub.close()
+    dstEpub.close(outputFilename)
 
-    print "Installed: ", componentCreator['creator'], componentCreator['name']
+    print "    Installed: ", componentCreator['creator'], componentCreator['name']
 
 #---------------------------------------------------------------------------
 def checkComponent(epub):
@@ -163,8 +164,11 @@ def extractComponent(epub, creator, componentName):
     print "NYI - incomplete implementation"
     srcEpub = epubUtil.EPUBZipContainer(epub)
     destComponent = epubUtil.ComponentZipContainer(creator + '_' + componentName + '.extracted.epub', creator, componentName)
-    destComponent.extract(srcEpub)
-    destComponent.close()
+    if destComponent.extract(srcEpub) == True:
+        destComponent.close(destComponent.get_filename())
+    else:
+        os.remove(destComponent.get_filename())
+
 
 #---------------------------------------------------------------------------
 def parse_args(argv):
@@ -177,6 +181,7 @@ def parse_args(argv):
     parser.add_argument('-c', nargs=1, help='Check that EPUB is a valid component ready for integration')
     parser.add_argument('-i', nargs=2, help='Integrate COMPONENT into EPUB')
     parser.add_argument('-I', nargs=4, help='Integrate COMPONENT into EPUB into PATHtoXHTML, attach at ID (an iframe)')
+    parser.add_argument('-o', nargs=1, help='EPUB to output integrated component, default is into name.merged.epub')
     parser.add_argument('-x', nargs=3, help='Extract CREATOR & COMPONENT name from EPUB')
     parser.add_argument('-D', action='store_true', help='Debug')
 
@@ -187,56 +192,58 @@ def main(argv):
 
     args = parse_args(argv)
 
-    try:
 
-        if args.examples:
-            print "\n   ", short_description_
-            print examples_
-            return
+    output = None
+    if args.examples:
+        print "\n   ", short_description_
+        print examples_
+        return
 
-        if args.v:
-            print "\n   ", app_name_, version_, "\n    "
-            print "   ", short_description_
-            print __license__
-            return
+    if args.v:
+        print "\n   ", app_name_, version_, "\n    "
+        print "   ", short_description_
+        print __license__
+        return
 
-        if args.l:
-            # print 'list', args.l
-            epubFile = args.l[0]
-            listComponents(epubFile)
-        elif args.c:
-            #print 'check', args.c
-            epubFile = args.c[0]
-            checkComponent(epubFile)
-        elif args.i:
-            print 'integrate', args.i
-            dstEpubFile = args.i[1]
-            componentFile = args.i[0]
-            installComponent(dstEpubFile, componentFile)
-        elif args.I:
-            print 'INTEGRATE', args.I
-            dstEpubFile = args.I[1]
-            componentFile = args.I[0]
-            spineitem = args.I[2]
-            elementId = args.I[3]
-            installComponent(dstEpubFile, componentFile, spineitem, elementId)
-        elif args.x:
-            print 'extract', args.x
-            epubFile = args.x[0]
-            creator = args.x[1]
-            componentName = args.x[2]
-            extractComponent(epubFile, creator, componentName)
+    if args.o:
+        output = args.o[0]
+
+    if args.l:
+        # print 'list', args.l
+        epubFile = args.l[0]
+        listComponents(epubFile)
+    elif args.c:
+        #print 'check', args.c
+        epubFile = args.c[0]
+        checkComponent(epubFile)
+    elif args.i:
+        dstEpubFile = args.i[1]
+        componentFile = args.i[0]
+        installComponent(dstEpubFile, componentFile, output)
+    elif args.I:
+        print 'INTEGRATE', args.I
+        dstEpubFile = args.I[1]
+        componentFile = args.I[0]
+        spineitem = args.I[2]
+        elementId = args.I[3]
+        installComponent(dstEpubFile, componentFile, output, spineitem, elementId)
+    elif args.x:
+        print 'Extract', args.x
+        epubFile = args.x[0]
+        creator = args.x[1]
+        componentName = args.x[2]
+        extractComponent(epubFile, creator, componentName)
 
 
 
-    except Exception as e:
-         print'\n\n================= error ==============================='
-         print e.message
-         print'================================================\n\n'
-         return -1
-    except:
-         print "Unknown Error:", sys.exc_info()[0]
-         return -1
+    # except Exception as e:
+    #      print'\n\n================= error ==============================='
+    #      print e.message
+    #      print'================================================\n\n'
+    #      return -1
+    # except:
+    #      print "Unknown Error:", sys.exc_info()[0]
+    #      return -1
 
 
 

@@ -63,6 +63,10 @@ def getCollectionCreatorAndName(collection):
 def getComponentDir(creator, name):
     return posixpath.normpath(posixpath.join(componentDirectory, creator, name))
 
+#---------------------------------------------------------------------------
+def getIDPrefix(creator, name):
+    return creator + '_' + name + '_'
+
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
 class EPUBSpineItem:
@@ -216,6 +220,7 @@ class PackageDom(xmlom.XMLOM):
         for collection in collections:
             metadata = self.findChildrenByTagName(collection, 'metadata')
             if len(metadata) == 1:
+                found = 0
                 metas = self.findChildrenByTagName(metadata[0], 'meta')
                 for meta in metas:
                     #<meta property="component:creator">Acme</meta>
@@ -266,6 +271,11 @@ class EPUBZipContainer:
 
 
     # ---------------------------------------------------------------------------
+    # get file name
+    def get_filename(self):
+        return self.name_
+
+    # ---------------------------------------------------------------------------
     # get original zipfile
     def __unzip(self):
         self.names_ = self.zipfile_.namelist()
@@ -275,11 +285,13 @@ class EPUBZipContainer:
 
     # ---------------------------------------------------------------------------
     # update original
-    def close(self):
-        mergedName = posixpath.normpath(posixpath.join(posixpath.splitext(self.name_)[0] + ".merged.epub"))
-        if os.path.exists(mergedName):
-            os.remove(mergedName)
-        newzipfile = zipfile.ZipFile(mergedName, 'a')
+    def close(self, outputFilename):
+        if outputFilename == None:
+            outputFilename = posixpath.normpath(posixpath.join(posixpath.splitext(self.name_)[0] + ".merged.epub"))
+
+        if os.path.exists(outputFilename):
+            os.remove(outputFilename)
+        newzipfile = zipfile.ZipFile(outputFilename, 'a')
 
         newzipfile.writestr('mimetype', self.contents_['mimetype'])
         self.contents_.pop('mimetype')
@@ -479,7 +491,7 @@ class EPUBZipContainer:
         xmlElement.addComment(dstManifest,
                               ' start of component manifest items ' + vendorName + ' - ' + componentName + ' ')
 
-        idprefix = vendorName + '_' + componentName + '_'
+        idprefix = getIDPrefix(vendorName, componentName)
 
         for item in items:
             newitem = xmlElement.addChildElement(dstManifest, item.localName)
@@ -599,15 +611,42 @@ class ComponentZipContainer(EPUBZipContainer):
         self.contents_[posixpath.normpath(posixpath.join(self.componentName_, 'content.opf'))] = blank_packagefile
 
     #------------------------------------------------------------------------------
+    # create mimetype
+
+    def createMimeType(self):
+        self.contents_['mimetype'] = "application/epub+zip"
+
+    #------------------------------------------------------------------------------
     # get the component metadata from the opf
 
     def extract(self, srcEpub):
         print "Extract: ", self.creator_, self.componentName_
         collection = srcEpub.getOpfDom().getComponentCollection(self.creator_, self.componentName_)
+
+        manifest = srcEpub.getOpfDom().getManifestItems()
+
+        manifestDict = {}
+        for item in manifest:
+            manifestDict[xmlElement.getAttributeValue(item, 'href')] = item
+
+        if collection == None:
+            print "No component from:", self.creator_, self.componentName_
+            return False
+
+        self.createMimeType()
+        self.buildOpf(manifestDict, collection)
+
+        return True
+
+    def buildOpf(self, manifestDict, collection):
         self.copyMetadata(collection)
+        self.buildManifest(manifestDict, collection)
 
+        print self.getOpfDom().toPrettyXML()
 
-        self.buildManifest(collection)
+        # write out the updated manifest
+        self.putfile(self.getOpfPath(), self.getOpfDom().toPrettyXML())
+
 
 
     #------------------------------------------------------------------------------
@@ -623,18 +662,19 @@ class ComponentZipContainer(EPUBZipContainer):
             newmeta = xmlElement.addChildElement(dstMetadata, meta.localName, xmlElement.getAttributes(meta))
             xmlElement.addTextNode(newmeta, xmlElement.getText(meta))
 
-        #print xmlElement.toPrettyXML(srcMetadata)
+        #print xmlElement.toPrettyXML(dstMetadata)
 
 
 
     #------------------------------------------------------------------------------
     # copy over meta data
 
-    def buildManifest(self, collection):
-        srcManifest = xmlElement.findFirstChildElement(collection, 'collection', {'role': 'manifest'})
-        manifestitems = xmlElement.getChildElements(srcManifest)
+    def buildManifest(self, manifestDict, collection):
+        collectionManifest = xmlElement.findFirstChildElement(collection, 'collection', {'role': 'manifest'})
+        manifestitems = xmlElement.getChildElements(collectionManifest)
 
         dstManifest = self.getOpfDom().getManifest()
+        idprefix = getIDPrefix(self.creator_, self.componentName_)
 
         for item in manifestitems:
             newitem = xmlElement.addChildElement(dstManifest, item.localName, xmlElement.getAttributes(item))
@@ -642,6 +682,15 @@ class ComponentZipContainer(EPUBZipContainer):
             href = xmlElement.getAttributeValue(newitem, 'href')
             parts = href.split(self.creator_ + '/')
             xmlElement.setAttribute(newitem, 'href', parts[1])
+
+            idvalue = xmlElement.getAttributeValue(manifestDict[href], 'id')
+
+            idvalue.split(idprefix).pop()
+            xmlElement.setAttribute(newitem, 'id', idvalue.split(idprefix).pop())
+
+            mediaType = xmlElement.getAttributeValue(manifestDict[href], 'media-type')
+            if mediaType != None:
+                xmlElement.setAttribute(newitem, 'media-type', mediaType)
 
 
         #print xmlElement.toPrettyXML(dstManifest)

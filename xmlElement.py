@@ -132,5 +132,10 @@ def cloneNode(node):
 
 
 def toPrettyXML(node):
-    return node.toprettyxml()
+    if node.nodeType == node.ELEMENT_NODE:
+        return node.toprettyxml()
+    elif node.nodeType == node.DOCUMENT_NODE:
+        return node.documentElement.toprettyxml()
+
+    return "????????????"
 

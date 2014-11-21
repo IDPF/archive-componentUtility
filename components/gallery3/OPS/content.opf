@@ -1,0 +1,87 @@
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" xml:lang="en" unique-identifier="uid"
+        prefix="component: http://www.idpf.org/vocab/component/#">
+
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+      <dc:type>scriptable-component</dc:type>
+    <dc:title id="title">Gallery</dc:title>
+    <dc:description>Gallery example</dc:description>
+    <dc:creator>Monster</dc:creator>
+    <dc:identifier id="uid">quiz123</dc:identifier>
+    <dc:language>en-US</dc:language>
+
+    <meta property="dcterms:modified">2012-04-02T12:47:00Z</meta>
+
+    <meta property="rendition:layout">pre-paginated</meta>
+    <meta property="rendition:orientation">landscape</meta>
+
+    <!-- Name -->
+    <meta property="component:creator">Monster</meta>
+    
+    <!-- Name -->
+    <meta property="component:name">Gallery-2</meta>
+
+    <!-- component version number -->
+    <meta property="component:version">1.0</meta>  
+
+    <!-- 
+         Does component contain script?
+         EPubCheck can validate this based on the properties="scripted" below
+      -->
+    <meta property="component:scripted">true</meta>  
+
+    <!-- Does component require local storage? -->
+    <meta property="component:localstorage">false</meta>  
+
+    <!-- 
+        Does component network access?
+        href="http://foo.com/bar.jpg" or xhr calls all qualify
+      -->
+    <meta property="component:networkAccess">false</meta>  
+
+    <!-- 
+        Some layout hints 
+      -->
+    <meta property="component:layout">width=600, height=400</meta>
+
+    <!-- Are there metadata standards to apply? -->
+    <meta property="component:accessibility">captions, aural</meta>  
+
+    <!-- iso 630 code(s) -->
+    <meta property="component:languages">en-us</meta>  
+
+    <!-- What params does this component want? -->
+    <meta property="component:params">images</meta>  
+
+
+
+  </metadata>
+
+  <manifest>
+    <item id="p0" href="gallery.xhtml" media-type="application/xhtml+xml" properties="scripted" />
+
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav" />
+
+    <item id="script0" href="js/gallery.js" media-type="application/javascript" />              
+    <item id="script1" href="js/common.js" media-type="application/javascript" />               
+    <item id="script2" href="js/mootools-drag-touch.js" media-type="application/javascript" />          
+    <item id="script3" href="js/shared/external/captionator-min.js" media-type="application/javascript" />
+    <item id="script4" href="js/shared/external/mootools-core-1.4.5-full-nocompat-yc.js" media-type="application/javascript" />
+    <item id="script5" href="js/shared/external/mootools-more-1.4.0.1-yc.js" media-type="application/javascript" />
+
+    <item id="gallery_image1" href="images/image-1.png" media-type="image/png" />
+    <item id="gallery_image2" href="images/image-2.png" media-type="image/png" />
+    <item id="gallery_image3" href="images/image-3.png" media-type="image/png" />
+    <item id="gallery_image4" href="images/image-4.png" media-type="image/png" />
+    <item id="gallery_image5" href="images/image-5.png" media-type="image/png" />
+    <item id="gallery_image6" href="images/image-6.png" media-type="image/png" />
+
+    <item id="style0" href="css/gallery.css" media-type="text/css" />           
+    <item id="style1" href="css/common.sample.css" media-type="text/css" />             
+
+  </manifest>
+
+  <spine>        
+    <itemref idref="p0" />               
+  </spine>
+
+</package>
