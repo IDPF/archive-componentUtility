@@ -1,5 +1,7 @@
 #!/bin/bash
 
+ ${EPUBCHECKDIR:?"Need to set env variable EPUBCHECKDIR to directory containing EPUBCHECK"}
+
 function createpub()
 {
     rm -f $@.epub;
@@ -14,27 +16,40 @@ function createpub()
     fi
 }
 
+function epubcheck()
+{
+   java -jar  $EPUBCHECKDIR/target/epubcheck.jar $@
+}
 
-rm -f *.epub
+function xxclean()
+{
+   find . -name .DS_Store | xargs rm;
+   find . -name *.*~ | xargs rm;
+   find . -name *.epub | xargs rm;
+}
+
+
+xxclean
+
 rm -rf Acme_Gallery_example.extracted
+rm -rf integratedComponent
+rm -rf componentContainer.merged
 
 
 echo ""
 echo "############################"
-echo "	Setup"
+echo "	Setup - build epubs"
 echo "############################"
 cd epub
-rm -f *.epub
-rm -rf integratedComponent
-rm -rf componentContainer.merged
-createpub componentContainer
-cd ..
 
-cd components
-rm -f *.epub
+createpub componentContainer
+
+cd ../components
+
 createpub gallery
 createpub gallery2
 createpub gallery3
+
 cd ..
 echo "###########################A#"
 echo "	Complete setup"
@@ -46,6 +61,11 @@ echo "############################"
 echo "	Check for valid component epubs"
 echo "############################"
 echo "############################"
+
+epubcheck components/gallery.epub
+epubcheck components/gallery2.epub
+epubcheck components/gallery3.epub
+
 ./componentUtility.py -c components/gallery.epub
 ./componentUtility.py -c components/gallery2.epub
 ./componentUtility.py -c components/gallery3.epub
@@ -58,11 +78,13 @@ echo "	Install components into epubs"
 echo "############################"
 echo "############################"
 ./componentUtility.py -i components/gallery.epub epub/componentContainer.epub
+epubcheck epub/componentContainer.merged.epub
 echo ""
 ./componentUtility.py -i components/gallery2.epub epub/componentContainer.merged.epub -o epub/integratedComponent.epub
+epubcheck epub/integratedComponent.epub
 echo ""
 ./componentUtility.py -i components/gallery3.epub epub/integratedComponent.epub -o epub/integratedComponent.epub
-
+epubcheck epub/integratedComponent.epub
 
 unzip -o epub/componentContainer.merged.epub -d epub/componentContainer.merged
 unzip -o epub/integratedComponent.epub -d epub/integratedComponent
@@ -80,12 +102,21 @@ echo ""
 echo ""
 echo "############################"
 echo "############################"
-echo "	Extrac components"
+echo "	Extract components"
 echo "############################"
 echo "############################"
 ./componentUtility.py -x epub/integratedComponent.epub Acme Gallery_example
 echo ""
 
+
+echo "############################"
+echo "	check work"
+echo "############################"
+epubcheck Acme_Gallery_example.extracted.epub
+
 unzip -o Acme_Gallery_example.extracted.epub -d Acme_Gallery_example.extracted
 
 
+./componentUtility.py -I Acme_Gallery_example.extracted.epub epub/componentContainer.epub OPS/componentContainer.xhtml component1
+epubcheck epub/componentContainer.merged.epub
+echo "********** DONE **********"

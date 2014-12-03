@@ -5,6 +5,10 @@
 #ignore epub files
 *.epub
 
+#ignore scratch dirs
+Acme_Gallery_example.extracted
+integratedComponent
+componentContainer.merged
 
 # git files to ignore
 .gitattributes
@@ -47,7 +51,8 @@ TAGS
 #SVN
 .svn
 *.svn-base
-*#
+
+#
 
 
 

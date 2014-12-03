@@ -33,8 +33,6 @@ __license__ = """
     either expressed or implied, of the FreeBSD Project.
 """
 
-
-
 import sys
 import os
 import posixpath
@@ -66,21 +64,21 @@ examples_ = """
 
 """
 
-#---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 def listComponents(epubFile):
     epub = epubUtil.EPUBZipContainer(epubFile)
     collections = epub.getOpfDom().getComponentCollections()
 
     print '\n  List of installed components'
     for collection in collections:
-        creatorname = epubUtil.getCollectionCreatorAndName(collection)
+        creatorname = epubUtil.EPUBComponentZipContainer.getCollectionCreatorAndName(collection)
         print '    Component creator: "' + creatorname['creator'] + '" - name: "' + creatorname['name'] + '"'
     print "  Done"
 
 
 #---------------------------------------------------------------------------
-def installComponent(dstEpubFile, componentFile, outputFilename, spineitem = None, elementId = None):
 
+def installComponent(dstEpubFile, componentFile, outputFilename, spineitem=None, elementId=None):
     # open source component epub and get vendor and component name
     srcComponent = epubUtil.ComponentZipContainer(componentFile)
     componentCreator = srcComponent.getComponentCreatorAndName()
@@ -95,7 +93,8 @@ def installComponent(dstEpubFile, componentFile, outputFilename, spineitem = Non
         print "    Already installed"
         return
 
-    dstComponentDir = epubUtil.getComponentDir(componentCreator['creator'], componentCreator['name'])
+    dstComponentDir = epubUtil.EPUBComponentZipContainer.getComponentDir(componentCreator['creator'],
+                                                                         componentCreator['name'])
     dstComponentRelPath = dstEpub.getComponentRelativePath(dstComponentDir)
 
 
@@ -118,7 +117,9 @@ def installComponent(dstEpubFile, componentFile, outputFilename, spineitem = Non
 
     print "    Installed: ", componentCreator['creator'], componentCreator['name']
 
+
 #---------------------------------------------------------------------------
+
 def checkComponent(epub):
     print '\n    Checking component epub: "' + epub + '"\n'
     valid = True
@@ -157,22 +158,27 @@ def checkComponent(epub):
     if valid == False:
         print "\n    INVALID COMPONENT EPUB"
     else:
-         print "\n    VALID COMPONENT EPUB (limited testing)"
+        print "\n    VALID COMPONENT EPUB (limited testing)"
+
 
 #---------------------------------------------------------------------------
+
 def extractComponent(epub, creator, componentName):
     print "NYI - incomplete implementation"
     srcEpub = epubUtil.EPUBZipContainer(epub)
-    destComponent = epubUtil.ComponentZipContainer(creator + '_' + componentName + '.extracted.epub', creator, componentName)
+    destComponent = epubUtil.ComponentZipContainer(creator + '_' + componentName + '.extracted.epub', creator,
+                                                   componentName)
     if destComponent.extract(srcEpub) == True:
         destComponent.close(destComponent.get_filename())
     else:
         os.remove(destComponent.get_filename())
+        return
 
 
 #---------------------------------------------------------------------------
 def parse_args(argv):
-    parser = argparse.ArgumentParser(description='Utility for integrating, extracting, checking and listing components in epubs')
+    parser = argparse.ArgumentParser(
+        description='Utility for integrating, extracting, checking and listing components in epubs')
 
     # TODO add types
     parser.add_argument('-v', action='store_true', help="Show version and license")
@@ -187,11 +193,10 @@ def parse_args(argv):
 
     return parser.parse_args()
 
+
 #---------------------------------------------------------------------------
 def main(argv):
-
     args = parse_args(argv)
-
 
     output = None
     if args.examples:
@@ -236,19 +241,17 @@ def main(argv):
 
 
 
-    # except Exception as e:
-    #      print'\n\n================= error ==============================='
-    #      print e.message
-    #      print'================================================\n\n'
-    #      return -1
-    # except:
-    #      print "Unknown Error:", sys.exc_info()[0]
-    #      return -1
-
-
+        # except Exception as e:
+        #      print'\n\n================= error ==============================='
+        #      print e.message
+        #      print'================================================\n\n'
+        #      return -1
+        # except:
+        #      print "Unknown Error:", sys.exc_info()[0]
+        #      return -1
 
 
 #---------------------------------------------------------------------------
-if __name__=='__main__':
+if __name__ == '__main__':
     ret = main(sys.argv)
 

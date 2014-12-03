@@ -1,14 +1,15 @@
 #!/bin/bash
 
 
-rm -f *.epub
-rm -rf Acme_Gallery_example.extracted
+find . -name *.epub | xargs rm;
+find . -name .DS_Store | xargs rm;
+find . -name *.*~ | xargs rm;
 
-rm -f epub/*.epub
+
+rm -rf Acme_Gallery_example.extracted
 rm -rf epub/integratedComponent
 rm -rf epub/componentContainer.merged
 
-rm -f components/*.epub
 
 
 

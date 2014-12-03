@@ -35,6 +35,7 @@ import os
 import zipfile
 import posixpath
 import urllib
+import uuid
 import time
 import xmlom
 import xmlElement
@@ -44,28 +45,6 @@ __author__ = 'wmanis'
 componentDirectory = 'components'
 componentNamespace = 'component: http://www.idpf.org/vocab/component/#'
 
-
-def getCollectionCreatorAndName(collection):
-    creatorName = { 'creator': None, 'name' : None }
-
-    metadata = xmlom.findChildrenByTagName(collection, 'metadata')
-    if len(metadata) == 1:
-        metas = xmlom.findChildrenByTagName(metadata[0], 'meta')
-        for meta in metas:
-            propval = xmlElement.getAttributeValue(meta, 'property')
-            if propval == "component:creator":
-                creatorName['creator'] =  xmlElement.getText(meta)
-            elif propval == "component:name":
-                creatorName['name'] =  xmlElement.getText(meta)
-    return creatorName
-
-#---------------------------------------------------------------------------
-def getComponentDir(creator, name):
-    return posixpath.normpath(posixpath.join(componentDirectory, creator, name))
-
-#---------------------------------------------------------------------------
-def getIDPrefix(creator, name):
-    return creator + '_' + name + '_'
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
@@ -155,10 +134,10 @@ class PackageDom(xmlom.XMLOM):
     def getMetadataItems(self):
         return self.findChildrenByTagName(self.getMetadata(), 'meta')
 
-    #---------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
     # get the metadata with attr & value
 
-    def getOpfMetadataItemsByAttr(self, name, value = None):
+    def getOpfMetadataItemsByAttr(self, name, value=None):
         items = []
 
         metadataitems = self.getMetadataItems()
@@ -174,8 +153,8 @@ class PackageDom(xmlom.XMLOM):
             elif itemValue == value:
                 # we care about, so this is a match
                 items.append(item)
-            # elif itemValue!= value:
-            #   this is not a match
+                # elif itemValue!= value:
+                #   this is not a match
 
         return items
 
@@ -206,8 +185,8 @@ class PackageDom(xmlom.XMLOM):
         found = 0
 
         for collection in collections:
-           if xmlElement.getAttributeValue(collection, 'role') != 'component:component':
-               collections.remove(collection)
+            if xmlElement.getAttributeValue(collection, 'role') != 'component:component':
+                collections.remove(collection)
         return collections
 
     #---------------------------------------------------------------------------
@@ -238,9 +217,7 @@ class PackageDom(xmlom.XMLOM):
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
 class EPUBZipContainer:
-
-
-    def __init__(self, name, opt = 'r', debug=False):
+    def __init__(self, name, opt='r', debug=False):
         self.name_ = name
         self.zipfile_ = zipfile.ZipFile(name, opt)
         self.__unzip()
@@ -317,6 +294,11 @@ class EPUBZipContainer:
         return self.opfpath_
 
 
+    def getOpfDirectory(self):
+        path = self.getOpfPath()
+        return posixpath.dirname(path)
+
+
     # ---------------------------------------------------------------------------
     # get the package xmldom
 
@@ -333,7 +315,7 @@ class EPUBZipContainer:
     def getfile(self, path):
         return self.contents_[path]
 
-    #---------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
     # get the package xmldom
 
     def putfile(self, path, text):
@@ -491,7 +473,7 @@ class EPUBZipContainer:
         xmlElement.addComment(dstManifest,
                               ' start of component manifest items ' + vendorName + ' - ' + componentName + ' ')
 
-        idprefix = getIDPrefix(vendorName, componentName)
+        idprefix = EPUBComponentZipContainer.getIDPrefix(vendorName, componentName)
 
         for item in items:
             newitem = xmlElement.addChildElement(dstManifest, item.localName)
@@ -552,15 +534,16 @@ class EPUBZipContainer:
         # write out the updated manifest
         self.putfile(self.getOpfPath(), self.getOpfDom().toPrettyXML())
 
-    def testComponentExistance(self, creator, name ):
+    def testComponentExistance(self, creator, name):
         collections = self.getOpfDom().getComponentCollections()
 
         for collection in collections:
-            creatorname = getCollectionCreatorAndName(collection)
-            if creatorname['creator'] == creator and  creatorname['name'] == name:
+            creatorname = EPUBComponentZipContainer.getCollectionCreatorAndName(collection)
+            if creatorname['creator'] == creator and creatorname['name'] == name:
                 return True
 
         return False
+
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -570,7 +553,7 @@ class ComponentZipContainer(EPUBZipContainer):
 
     #------------------------------------------------------------------------------
 
-    def __init__(self, name, creator = None, componentName = None, debug=True):
+    def __init__(self, name, creator=None, componentName=None, debug=True):
         self.creator_ = creator
         self.componentName_ = componentName
         if self.creator_ == None:
@@ -636,17 +619,68 @@ class ComponentZipContainer(EPUBZipContainer):
         self.createMimeType()
         self.buildOpf(manifestDict, collection)
 
+        self.transferInItems(srcEpub, collection)
+
         return True
+
+    #---------------------------------------------------------------------------
+    def buildNavDoc(self, linkref):
+        navDoc1_ = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang='en-us' lang='en-us'>
+    <head>
+				<title>TOC</title>
+        <meta charset="utf-8" />
+    </head>
+    <body>
+        <nav epub:type="toc" id="toc">
+            <ol>
+                <li><a href='"""
+        navDoc2_ = """'>Gallery</a>
+								</li>
+						</ol>
+				</nav>
+		</body>
+</html>
+"""
+        navDoc = navDoc1_ + linkref + navDoc2_
+        print navDoc
+        self.contents_[posixpath.join(self.getOpfDirectory(), 'nav.xhtml')] = navDoc
+
+
+    #---------------------------------------------------------------------------
+    # transfer component assets and update the destination opf file
+
+    def transferInItems(self, srcEpub, collection):
+
+        # get items from manifest for transfer
+        srcManifest = xmlom.findChildrenByTagName(collection, 'collection')
+        srcItems = xmlom.findChildrenByTagName(srcManifest[0], 'link');
+
+        for item in srcItems:
+            href = xmlElement.getAttributeValue(item, 'href')
+            parts = href.split(self.componentName_ + '/')
+            newhref = parts.pop()
+
+            srcPath = posixpath.normpath(posixpath.join(srcEpub.getOpfDirectory(), href))
+            dstPath = posixpath.normpath(posixpath.join(self.getOpfDirectory(), newhref))
+
+            # copy the bytes over
+            srcbytes = srcEpub.getfile(srcPath)
+            self.putfile(dstPath, srcbytes)
+
+    #------------------------------------------------------------------------------
 
     def buildOpf(self, manifestDict, collection):
         self.copyMetadata(collection)
-        self.buildManifest(manifestDict, collection)
+
+        collectionSpine = xmlom.findChildrenByTagName(collection, 'link')
+
+        self.buildManifest(manifestDict, collection, xmlElement.getAttributeValue(collectionSpine[0], 'href'))
 
         print self.getOpfDom().toPrettyXML()
 
         # write out the updated manifest
         self.putfile(self.getOpfPath(), self.getOpfDom().toPrettyXML())
-
 
 
     #------------------------------------------------------------------------------
@@ -662,40 +696,90 @@ class ComponentZipContainer(EPUBZipContainer):
             newmeta = xmlElement.addChildElement(dstMetadata, meta.localName, xmlElement.getAttributes(meta))
             xmlElement.addTextNode(newmeta, xmlElement.getText(meta))
 
-        #print xmlElement.toPrettyXML(dstMetadata)
+        #  <dc:type>scriptable-component</dc:type>
+        newmeta = xmlElement.addChildElement(dstMetadata, 'dc:type')
+        xmlElement.addTextNode(newmeta, 'scriptable-component')
 
+        # <dc:creator>Acme</dc:creator>
+        newmeta = xmlElement.addChildElement(dstMetadata, 'dc:creator')
+        xmlElement.addTextNode(newmeta, self.creator_)
+
+        # <dc:title id="title">Gallery</dc:title>
+        newmeta = xmlElement.addChildElement(dstMetadata, 'dc:title', {'id': 'title'})
+        xmlElement.addTextNode(newmeta, self.componentName_)
+
+        # <dc:description>Gallery_example</dc:description>
+        newmeta = xmlElement.addChildElement(dstMetadata, 'dc:description')
+        xmlElement.addTextNode(newmeta, 'Extracted component')
+
+
+        # <dc:identifier id="uid">1234567</dc:identifier>
+        newmeta = xmlElement.addChildElement(dstMetadata, 'dc:identifier', {'id': 'uid'})
+        xmlElement.addTextNode(newmeta, str(uuid.uuid4()))
+
+
+        # <dc:language>en-US</dc:language>
+        newmeta = xmlElement.addChildElement(dstMetadata, 'dc:language')
+        xmlElement.addTextNode(newmeta, 'en-us')
+
+        #print xmlElement.toPrettyXML(dstMetadata)
 
 
     #------------------------------------------------------------------------------
     # copy over meta data
 
-    def buildManifest(self, manifestDict, collection):
+    def buildManifest(self, manifestDict, collection, linkref):
         collectionManifest = xmlElement.findFirstChildElement(collection, 'collection', {'role': 'manifest'})
         manifestitems = xmlElement.getChildElements(collectionManifest)
 
+        #      <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+        manifestitems.append(xmlElement.addChildElement(collectionManifest, 'item',
+                                                        {'id': 'nav', 'href': 'nav.xhtml',
+                                                         'media-type': 'application/xhtml+xml', 'properties': 'nav'}))
+
         dstManifest = self.getOpfDom().getManifest()
-        idprefix = getIDPrefix(self.creator_, self.componentName_)
+        idprefix = EPUBComponentZipContainer.getIDPrefix(self.creator_, self.componentName_)
+
+        newManifestDict = {}
 
         for item in manifestitems:
-            newitem = xmlElement.addChildElement(dstManifest, item.localName, xmlElement.getAttributes(item))
+            newitem = xmlElement.addChildElement(dstManifest, 'item', xmlElement.getAttributes(item))
             # TODO make more robust
             href = xmlElement.getAttributeValue(newitem, 'href')
-            parts = href.split(self.creator_ + '/')
-            xmlElement.setAttribute(newitem, 'href', parts[1])
+            parts = href.split(self.componentName_ + '/')
+            newhref = parts.pop()
 
-            idvalue = xmlElement.getAttributeValue(manifestDict[href], 'id')
+            xmlElement.setAttribute(newitem, 'href', newhref)
 
-            idvalue.split(idprefix).pop()
-            xmlElement.setAttribute(newitem, 'id', idvalue.split(idprefix).pop())
+            attributes = xmlElement.getAttributes(manifestDict[href])
 
-            mediaType = xmlElement.getAttributeValue(manifestDict[href], 'media-type')
-            if mediaType != None:
-                xmlElement.setAttribute(newitem, 'media-type', mediaType)
+            for attr in attributes:
+                if attr == 'id':
+                    idvalue = xmlElement.getAttributeValue(manifestDict[href], 'id')
+                    idvalue = idvalue.split(idprefix).pop()
+                    xmlElement.setAttribute(newitem, 'id', idvalue)
+                elif attr == 'href':
+                    continue;
+                else:
+                    xmlElement.setAttribute(newitem, attr, attributes[attr])
+
+            if href == linkref:
+                self.buildSpine(idvalue, newhref)
 
 
-        #print xmlElement.toPrettyXML(dstManifest)
+                #print xmlElement.toPrettyXML(dstManifest)
 
 
+    #------------------------------------------------------------------------------
+    # get the component metadata from the opf
+
+    def buildSpine(self, idvalue, linkref):
+        spine = self.getOpfDom().getSpine()
+        xmlElement.addChildElement(spine, 'itemref', {'idref': idvalue})
+        #xmlElement.addChildElement(spine, 'itemref', {'idref' : 'nav'})
+
+        self.buildNavDoc(linkref)
+        print 'boo'
 
     #------------------------------------------------------------------------------
     # get the component metadata from the opf
@@ -745,7 +829,8 @@ class ComponentZipContainer(EPUBZipContainer):
         if self.creator_ != None and self.componentName_ != None:
             return {'creator': urllib.quote(self.creator_), 'name': urllib.quote(self.componentName_)}
 
-        return {'creator': None, 'name': None }
+        return {'creator': None, 'name': None}
+
     #---------------------------------------------------------------------------
     # get the component creator and name from the meta properties
 
@@ -759,3 +844,33 @@ class ComponentZipContainer(EPUBZipContainer):
                 meta['value'] = creator
             if meta['property'] == nameProp:
                 meta['value'] = name
+
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+class EPUBComponentZipContainer(EPUBZipContainer):
+    @staticmethod
+    def getCollectionCreatorAndName(collection):
+        creatorName = {'creator': None, 'name': None}
+
+        metadata = xmlom.findChildrenByTagName(collection, 'metadata')
+        if len(metadata) == 1:
+            metas = xmlom.findChildrenByTagName(metadata[0], 'meta')
+            for meta in metas:
+                propval = xmlElement.getAttributeValue(meta, 'property')
+                if propval == "component:creator":
+                    creatorName['creator'] = xmlElement.getText(meta)
+                elif propval == "component:name":
+                    creatorName['name'] = xmlElement.getText(meta)
+        return creatorName
+
+    #---------------------------------------------------------------------------
+
+    @staticmethod
+    def getComponentDir(creator, name):
+        return posixpath.normpath(posixpath.join(componentDirectory, creator, name))
+
+    #---------------------------------------------------------------------------
+
+    @staticmethod
+    def getIDPrefix(creator, name):
+        return creator + '_' + name + '_'
