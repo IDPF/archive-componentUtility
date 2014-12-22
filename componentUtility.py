@@ -81,6 +81,10 @@ def listComponents(epubFile):
 #---------------------------------------------------------------------------
 
 def installComponent(dstEpubFile, componentFile, outputFilename, spineitem=None, elementId=None):
+    #if dstEpubFile == outputFilename:
+    #   raise "Can't write over an existing EPUB"
+
+
     # open source component epub and get vendor and component name
     srcComponent = epubUtil.ComponentZipContainer(componentFile)
     componentCreator = srcComponent.getComponentCreatorAndName()
@@ -108,7 +112,7 @@ def installComponent(dstEpubFile, componentFile, outputFilename, spineitem=None,
         dstSpineItem = epubUtil.EPUBSpineItem(dstEpub, spineitem)
 
         componentFilename = srcComponent.getComponentHTML()
-        componentFilename = posixpath.normpath(posixpath.join(dstComponentRelPath, componentFilename))
+        componentFilename = posixpath.normpath(posixpath.join(dstComponentRelPath, componentFilename).replace("\\", "/"))
 
         dstSpineItem.insert(elementId, componentFilename)
 
@@ -216,23 +220,23 @@ def main(argv):
         output = args.o[0]
 
     if args.l:
-        # print 'list', args.l
+        print 'list', 
         epubFile = args.l[0]
         listComponents(epubFile)
     elif args.c:
-        #print 'check', args.c
         epubFile = args.c[0]
         checkComponent(epubFile)
     elif args.i:
         dstEpubFile = args.i[1]
         componentFile = args.i[0]
+        print 'integrate', args.i
         installComponent(dstEpubFile, componentFile, output)
     elif args.I:
-        print 'INTEGRATE', args.I
         dstEpubFile = args.I[1]
         componentFile = args.I[0]
         spineitem = args.I[2]
         elementId = args.I[3]
+        print 'INTEGRATE', args.I, dstEpubFile, componentFile
         installComponent(dstEpubFile, componentFile, output, spineitem, elementId)
     elif args.x:
         print 'Extract', args.x

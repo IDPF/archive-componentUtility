@@ -221,7 +221,7 @@ class PackageDom(xmlom.XMLOM):
 class EPUBZipContainer:
     def __init__(self, name, opt='r', debug=False):
         self.name_ = name
-        self.zipfile_ = zipfile.ZipFile(name, opt)
+        self.zipfile_ = zipfile.ZipFile(os.path.normpath(name), opt)
         self.__unzip()
         self.opfpath_ = None
 
@@ -267,10 +267,16 @@ class EPUBZipContainer:
     def close(self, outputFilename):
         if outputFilename == None:
             outputFilename = posixpath.normpath(posixpath.join(posixpath.splitext(self.name_)[0] + ".merged.epub"))
+        else:
+            outputFilename = posixpath.normpath(outputFilename)
 
-        if os.path.exists(outputFilename):
-            os.remove(outputFilename)
-        newzipfile = zipfile.ZipFile(outputFilename, 'a')
+        if self.name_ == outputFilename:
+            self.zipfile_.close()
+
+        if os.path.exists(os.path.normpath(outputFilename)):
+            os.remove(os.path.normpath(outputFilename))
+
+        newzipfile = zipfile.ZipFile(os.path.normpath(outputFilename), 'a')
 
         newzipfile.writestr('mimetype', self.contents_['mimetype'])
         self.contents_.pop('mimetype')
@@ -278,6 +284,10 @@ class EPUBZipContainer:
         for name in self.contents_:
             newzipfile.writestr(name, self.contents_[name])
 
+        newzipfile.close()
+
+        if self.name_ != outputFilename:
+            self.zipfile_.close()
 
     # ---------------------------------------------------------------------------
     # get original zipfile
@@ -396,7 +406,7 @@ class EPUBZipContainer:
 
     def getComponentRelativePath(self, componentDir):
         dstOPFPath = self.getOpfPath()
-        return os.path.relpath(componentDir, os.path.dirname(dstOPFPath))
+        return posixpath.relpath(componentDir, os.path.dirname(dstOPFPath))
 
     #---------------------------------------------------------------------------
     # transfer component assets and update the destination opf file
@@ -749,7 +759,7 @@ class ComponentZipContainer(EPUBZipContainer):
             # TODO make more robust
             href = xmlElement.getAttributeValue(newitem, 'href')
             parts = href.split(self.componentName_ + '/')
-            newhref = parts.pop()
+            newhref = posixpath.normpath(parts.pop())
 
             xmlElement.setAttribute(newitem, 'href', newhref)
 
@@ -869,7 +879,8 @@ class EPUBComponentZipContainer(EPUBZipContainer):
 
     @staticmethod
     def getComponentDir(creator, name):
-        return posixpath.normpath(posixpath.join(componentDirectory, creator, name))
+        path = posixpath.normpath(posixpath.join(componentDirectory, creator, name))
+        return path
 
     #---------------------------------------------------------------------------
 
