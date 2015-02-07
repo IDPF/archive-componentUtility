@@ -38,6 +38,10 @@ Run this in the parent directory containing the epub
 
 Component Utility
 
+CAVEAT: This code is not up to date with current spec http://www.idpf.org/epub/sc/pkg/
+
+The working group will be bringing it into alignment with spec shortly.
+
 Utility for integrating, listing, checking and extracting EPUB components
 
 
