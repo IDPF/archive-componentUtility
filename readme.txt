@@ -1,5 +1,9 @@
-# WARNING
-This repository is no longer under active development. Please refer to https://github.com/IDPF/scriptable-components for the latest development work on EPUB Scriptable Components.
+--------------------------------------------------------------
+WARNING
+This repository is no longer under active development. Please 
+refer to https://github.com/IDPF/scriptable-components for the 
+latest development work on EPUB Scriptable Components.
+--------------------------------------------------------------
 
 You will need python v2.7, should exist on Macs, Windows may
     require an install.
